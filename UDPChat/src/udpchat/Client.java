@@ -3,14 +3,19 @@
  * To change this template file, choose Tools | Templates
  * and open the template in the editor.
  */
-package udpchat;
-
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
-import java.net.Socket;
+import java.net.DatagramPacket;
+import java.net.DatagramSocket;
+import java.net.InetAddress;
+import java.net.SocketException;
+import java.util.LinkedList;
+import java.util.Queue;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+
+import javax.swing.JOptionPane;
 
 /**
  *
@@ -21,11 +26,21 @@ public class Client extends javax.swing.JFrame {
     /**
      * Creates new form Client
      */
-    static Socket socket;
+	static int port;
+	static String address;
+	static int outgoingBit;
+	static DatagramSocket socket;
     static DataInputStream dataIn;
     static DataOutputStream dataOut;
     
     public Client() {
+
+    	try {
+			socket = new DatagramSocket();
+		} catch (SocketException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
         initComponents();
     }
 
@@ -40,6 +55,7 @@ public class Client extends javax.swing.JFrame {
 
         jScrollPane1 = new javax.swing.JScrollPane();
         messageArea = new javax.swing.JTextArea();
+        messageArea.setText("PORT : "+socket.getLocalPort());
         messageText = new javax.swing.JTextField();
         messageSend = new javax.swing.JButton();
 
@@ -49,9 +65,9 @@ public class Client extends javax.swing.JFrame {
         messageArea.setRows(5);
         jScrollPane1.setViewportView(messageArea);
 
-        messageText.setText("jTextField1");
+        messageText.setText("");
 
-        messageSend.setText("jButton1");
+        messageSend.setText("SEND");
         messageSend.addActionListener(new java.awt.event.ActionListener() {
             public void actionPerformed(java.awt.event.ActionEvent evt) {
                 messageSendActionPerformed(evt);
@@ -89,9 +105,20 @@ public class Client extends javax.swing.JFrame {
 
     private void messageSendActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_messageSendActionPerformed
         try {
+        	outgoingBit = outgoingBit==1?0:1;
+        	if(!messageText.getText().equals("")){
+        	byte[] outgoingData = new byte[1024];
+        	InetAddress ip = InetAddress.getByName(address);        	
             String output = "";
-            output = messageText.getText().trim();
-            dataOut.writeUTF(output);
+            output = messageText.getText().trim();            
+            messageArea.setText(messageArea.getText().trim()+"\nMe:  "+output);
+            output = outgoingBit+output;
+            outgoingData = output.getBytes();
+            System.out.println("CLIENT :"+outgoingData[0]);
+        	DatagramPacket outgoingPacket = new DatagramPacket(outgoingData, outgoingData.length, ip, port);
+            socket.send(outgoingPacket);
+            messageText.setText("");
+        	}
         } catch (IOException ex) {
             Logger.getLogger(Client.class.getName()).log(Level.SEVERE, null, ex);
         }
@@ -132,15 +159,18 @@ public class Client extends javax.swing.JFrame {
         });
         
         try{
-            socket = new Socket("127.0.0.1",1201);
-            dataIn = new DataInputStream(socket.getInputStream());
-            dataOut = new DataOutputStream(socket.getOutputStream());
-            String input = "";
-            while(!input.equals("exit")){
-                input = dataIn.readUTF();
-                messageArea.setText(messageArea.getText().trim()+"\n Server:\t"+input);
-                
+        	Queue<DatagramPacket> queue = new LinkedList<DatagramPacket>();
+        	port = Integer.parseInt(JOptionPane.showInputDialog("Enter the target port:"));
+        	byte[] incomingData = new byte[1024];            
+            DatagramPacket incomingPacket = new DatagramPacket(incomingData, incomingData.length);
+            queue.add(incomingPacket);
+            while(!queue.isEmpty()){
+                socket.receive(queue.poll());
+                String incomingMessage = new String(incomingPacket.getData());
+                messageArea.setText(messageArea.getText().trim()+"\nFriend:  "+incomingMessage.substring(1));
+                queue.add(incomingPacket);
             }
+            
             
         }
         catch(Exception e){

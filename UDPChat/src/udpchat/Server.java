@@ -3,15 +3,19 @@
  * To change this template file, choose Tools | Templates
  * and open the template in the editor.
  */
-package udpchat;
-
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
-import java.net.ServerSocket;
-import java.net.Socket;
+import java.net.DatagramPacket;
+import java.net.DatagramSocket;
+import java.net.InetAddress;
+import java.net.SocketException;
+import java.util.LinkedList;
+import java.util.Queue;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+
+import javax.swing.JOptionPane;
 
 /**
  *
@@ -22,13 +26,23 @@ public class Server extends javax.swing.JFrame {
     /**
      * Creates new form Server
      */
-    static ServerSocket serverSocket;
-    static Socket socket;
+	static int port;
+	static String address;
+	static int outgoingBit;
+	static DatagramSocket socket;
     static DataInputStream dataIn;
     static DataOutputStream dataOut;
     
     public Server() {
-        initComponents();
+
+    	try {
+			socket = new DatagramSocket();
+	        initComponents();
+	        outgoingBit = (int)(Math.random() * 2);
+		} catch (SocketException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
     }
 
     /**
@@ -42,6 +56,7 @@ public class Server extends javax.swing.JFrame {
 
         jScrollPane1 = new javax.swing.JScrollPane();
         messageArea = new javax.swing.JTextArea();
+        messageArea.setText("PORT : "+socket.getLocalPort());
         messageText = new javax.swing.JTextField();
         messageSend = new javax.swing.JButton();
 
@@ -51,14 +66,9 @@ public class Server extends javax.swing.JFrame {
         messageArea.setRows(5);
         jScrollPane1.setViewportView(messageArea);
 
-        messageText.setText("jTextField1");
-        messageText.addActionListener(new java.awt.event.ActionListener() {
-            public void actionPerformed(java.awt.event.ActionEvent evt) {
-                messageTextActionPerformed(evt);
-            }
-        });
+        messageText.setText("");
 
-        messageSend.setText("jButton1");
+        messageSend.setText("SEND");
         messageSend.addActionListener(new java.awt.event.ActionListener() {
             public void actionPerformed(java.awt.event.ActionEvent evt) {
                 messageSendActionPerformed(evt);
@@ -69,44 +79,50 @@ public class Server extends javax.swing.JFrame {
         getContentPane().setLayout(layout);
         layout.setHorizontalGroup(
             layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
-            .addGroup(javax.swing.GroupLayout.Alignment.TRAILING, layout.createSequentialGroup()
+            .addGroup(layout.createSequentialGroup()
                 .addContainerGap()
                 .addGroup(layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
                     .addComponent(jScrollPane1)
                     .addGroup(layout.createSequentialGroup()
-                        .addComponent(messageText, javax.swing.GroupLayout.PREFERRED_SIZE, 260, javax.swing.GroupLayout.PREFERRED_SIZE)
-                        .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.UNRELATED)
-                        .addComponent(messageSend, javax.swing.GroupLayout.DEFAULT_SIZE, 110, Short.MAX_VALUE)))
+                        .addComponent(messageText, javax.swing.GroupLayout.PREFERRED_SIZE, 282, javax.swing.GroupLayout.PREFERRED_SIZE)
+                        .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
+                        .addComponent(messageSend, javax.swing.GroupLayout.DEFAULT_SIZE, 92, Short.MAX_VALUE)))
                 .addContainerGap())
         );
         layout.setVerticalGroup(
             layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
             .addGroup(layout.createSequentialGroup()
                 .addContainerGap()
-                .addComponent(jScrollPane1, javax.swing.GroupLayout.PREFERRED_SIZE, 173, javax.swing.GroupLayout.PREFERRED_SIZE)
+                .addComponent(jScrollPane1, javax.swing.GroupLayout.PREFERRED_SIZE, 193, javax.swing.GroupLayout.PREFERRED_SIZE)
                 .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.UNRELATED)
                 .addGroup(layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
                     .addComponent(messageText)
-                    .addComponent(messageSend, javax.swing.GroupLayout.DEFAULT_SIZE, 94, Short.MAX_VALUE))
+                    .addComponent(messageSend, javax.swing.GroupLayout.DEFAULT_SIZE, 74, Short.MAX_VALUE))
                 .addContainerGap())
         );
 
         pack();
     }// </editor-fold>//GEN-END:initComponents
 
-    private void messageTextActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_messageTextActionPerformed
-        // TODO add your handling code here:
-    }//GEN-LAST:event_messageTextActionPerformed
-
     private void messageSendActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_messageSendActionPerformed
-        try {
+    	try {
+    		outgoingBit = outgoingBit==1?0:1;
+        	if(!messageText.getText().equals("")){
+        	byte[] outgoingData = new byte[1024];
+        	InetAddress ip = InetAddress.getByName(address);        	
             String output = "";
-            output = messageText.getText().trim();
-            dataOut.writeUTF(output);
-        } catch (IOException ex) {
+            output = messageText.getText().trim();            
+            messageArea.setText(messageArea.getText().trim()+"\nMe:  "+output);
+            output = outgoingBit+output;
+            outgoingData = output.getBytes();
+            System.out.println("SERVER: "+outgoingData[0]);
+        	DatagramPacket outgoingPacket = new DatagramPacket(outgoingData, outgoingData.length, ip, port);
+            socket.send(outgoingPacket);
+            messageText.setText("");
+        	}
+    	}catch (IOException ex) {
             Logger.getLogger(Server.class.getName()).log(Level.SEVERE, null, ex);
         }
-        
     }//GEN-LAST:event_messageSendActionPerformed
 
     /**
@@ -143,18 +159,23 @@ public class Server extends javax.swing.JFrame {
             }
         });
         
-        String input = "";
         try{
-            serverSocket = new ServerSocket(1201);
-            socket = serverSocket.accept();
-            
-            dataIn = new DataInputStream(socket.getInputStream());
-            dataOut = new DataOutputStream(socket.getOutputStream());
-            
-            while(!input.equals("exit")){
-                input = dataIn.readUTF();
-                messageArea.setText(messageArea.getText().trim()+"\n Client\t"+input);
+        	address = JOptionPane.showInputDialog("Enter the target address:");
+        	port = Integer.parseInt(JOptionPane.showInputDialog("Enter the target port:"));
+        	
+        	int incomingBit;
+        	Queue<DatagramPacket> queue = new LinkedList<DatagramPacket>();
+        	byte[] incomingData = new byte[1024];            
+            DatagramPacket incomingPacket = new DatagramPacket(incomingData, incomingData.length);
+            queue.add(incomingPacket);
+            while(!queue.isEmpty()){
+                socket.receive(queue.poll());
+                String incomingMessage = new String(incomingPacket.getData());
+                messageArea.setText(messageArea.getText().trim()+"\nFriend:  "+incomingMessage.substring(1));
+                queue.add(incomingPacket);
             }
+            
+            
         }
         catch(Exception e){
             
