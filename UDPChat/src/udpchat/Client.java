@@ -37,11 +37,12 @@ public class Client extends javax.swing.JFrame {
 
     	try {
 			socket = new DatagramSocket();
+	        initComponents();
+	        outgoingBit = (int)(Math.random() * 2);
 		} catch (SocketException e) {
 			// TODO Auto-generated catch block
 			e.printStackTrace();
 		}
-        initComponents();
     }
 
     /**
@@ -117,11 +118,29 @@ public class Client extends javax.swing.JFrame {
             System.out.println("CLIENT :"+outgoingData[0]);
         	DatagramPacket outgoingPacket = new DatagramPacket(outgoingData, outgoingData.length, ip, port);
             socket.send(outgoingPacket);
+            byte[] ackData = new byte[1024];
+			DatagramPacket ackPacket = new DatagramPacket(ackData,ackData.length);
+            boolean received = false;
+            System.out.println("ONE");
+            while(!received){ 
+            	System.out.println("TWO");
+            	socket.receive(ackPacket);
+            	System.out.println("RECEIVED");
+            	System.out.println("HERE: "+new String(ackPacket.getData()).trim());
+            	if(new String(ackPacket.getData()).trim().equals("ACK")){
+            		System.out.println("GOT IT!!!!!");
+            		received = true;
+            	}
+            	else{
+            		System.out.println("HAD TO SEND AGAIN :((((");
+            		socket.send(outgoingPacket);
+            	}
+            }
+            System.out.println("THREE");
             messageText.setText("");
         	}
-        } catch (IOException ex) {
-            Logger.getLogger(Client.class.getName()).log(Level.SEVERE, null, ex);
-        }
+        } catch (Exception e) {
+		}
     }//GEN-LAST:event_messageSendActionPerformed
 
     /**
@@ -159,17 +178,36 @@ public class Client extends javax.swing.JFrame {
         });
         
         try{
-        	Queue<DatagramPacket> queue = new LinkedList<DatagramPacket>();
+        	//address;
         	port = Integer.parseInt(JOptionPane.showInputDialog("Enter the target port:"));
-        	byte[] incomingData = new byte[1024];            
-            DatagramPacket incomingPacket = new DatagramPacket(incomingData, incomingData.length);
-            queue.add(incomingPacket);
-            while(!queue.isEmpty()){
-                socket.receive(queue.poll());
-                String incomingMessage = new String(incomingPacket.getData());
-                messageArea.setText(messageArea.getText().trim()+"\nFriend:  "+incomingMessage.substring(1));
-                queue.add(incomingPacket);
-            }
+        	int lastPacketBit;
+			int packetsNumber = 0;
+			int packetsToSync = 5;
+			float packetLossRate = 0.2f;
+			byte[] incomingData = new byte[1024];			
+			DatagramPacket incomingPacket = new DatagramPacket(incomingData,incomingData.length);			
+			Queue<DatagramPacket> incomingQueue = new LinkedList<DatagramPacket>();
+			incomingQueue.add(incomingPacket);
+            while (!new String(incomingPacket.getData()).trim().equals("exit")) {
+				boolean synced = packetsNumber>packetsToSync;
+				incomingData = new byte[1024];
+				incomingPacket = new DatagramPacket(incomingData,incomingData.length);
+				
+				if(Math.random()>=packetLossRate){
+					socket.receive(incomingPacket);
+					if(synced){						
+					}
+					//System.out.println("SYMBOL IS: "+(int)incomingPacket.getData()[0]);
+					display(incomingPacket);	
+					incomingQueue.add(incomingPacket);
+				}
+				else{
+					System.out.println("SLEEPING");
+					incomingQueue.poll();
+					Thread.sleep(1000);
+				}
+				packetsNumber = packetsNumber + 1;
+			}
             
             
         }
@@ -177,6 +215,11 @@ public class Client extends javax.swing.JFrame {
             
         }
     }
+    public static void display(DatagramPacket incomingPacket){
+		String incomingMessage = new String(incomingPacket.getData());
+		messageArea.setText(messageArea.getText().trim()
+				+ "\nFriend:  " + incomingMessage.substring(1));
+	}
 
     // Variables declaration - do not modify//GEN-BEGIN:variables
     private javax.swing.JScrollPane jScrollPane1;
