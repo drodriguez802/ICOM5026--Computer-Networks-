@@ -30,6 +30,8 @@ public class Client extends javax.swing.JFrame {
 	static String address;
 	static int outgoingBit;
 	static DatagramSocket socket;
+	static DatagramPacket incomingPacket;
+	static DatagramPacket outgoingPacket;
     static DataInputStream dataIn;
     static DataOutputStream dataOut;
     
@@ -56,7 +58,7 @@ public class Client extends javax.swing.JFrame {
 
         jScrollPane1 = new javax.swing.JScrollPane();
         messageArea = new javax.swing.JTextArea();
-        messageArea.setText("PORT : "+socket.getLocalPort());
+        messageArea.setText(" CLIENT PORT : "+socket.getLocalPort());
         messageText = new javax.swing.JTextField();
         messageSend = new javax.swing.JButton();
 
@@ -105,42 +107,24 @@ public class Client extends javax.swing.JFrame {
     }// </editor-fold>//GEN-END:initComponents
 
     private void messageSendActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_messageSendActionPerformed
-        try {
-        	outgoingBit = outgoingBit==1?0:1;
+    	try {
+    		outgoingBit = outgoingBit==1?0:1;
         	if(!messageText.getText().equals("")){
         	byte[] outgoingData = new byte[1024];
-        	InetAddress ip = InetAddress.getByName(address);        	
+        	InetAddress ip = InetAddress.getByName("127.0.0.1");        	
             String output = "";
             output = messageText.getText().trim();            
             messageArea.setText(messageArea.getText().trim()+"\nMe:  "+output);
             output = outgoingBit+output;
             outgoingData = output.getBytes();
-            System.out.println("CLIENT :"+outgoingData[0]);
-        	DatagramPacket outgoingPacket = new DatagramPacket(outgoingData, outgoingData.length, ip, port);
+            System.out.println("SERVER: "+outgoingData[0]);
+        	outgoingPacket = new DatagramPacket(outgoingData, outgoingData.length, ip, port);
             socket.send(outgoingPacket);
-            byte[] ackData = new byte[1024];
-			DatagramPacket ackPacket = new DatagramPacket(ackData,ackData.length);
-            boolean received = false;
-            System.out.println("ONE");
-            while(!received){ 
-            	System.out.println("TWO");
-            	socket.receive(ackPacket);
-            	System.out.println("RECEIVED");
-            	System.out.println("HERE: "+new String(ackPacket.getData()).trim());
-            	if(new String(ackPacket.getData()).trim().equals("ACK")){
-            		System.out.println("GOT IT!!!!!");
-            		received = true;
-            	}
-            	else{
-            		System.out.println("HAD TO SEND AGAIN :((((");
-            		socket.send(outgoingPacket);
-            	}
-            }
-            System.out.println("THREE");
             messageText.setText("");
         	}
-        } catch (Exception e) {
-		}
+    	}catch (IOException ex) {
+            Logger.getLogger(Client.class.getName()).log(Level.SEVERE, null, ex);
+        }
     }//GEN-LAST:event_messageSendActionPerformed
 
     /**
@@ -178,36 +162,38 @@ public class Client extends javax.swing.JFrame {
         });
         
         try{
-        	//address;
+        	//address = JOptionPane.showInputDialog("Enter the target address:");
         	port = Integer.parseInt(JOptionPane.showInputDialog("Enter the target port:"));
-        	int lastPacketBit;
-			int packetsNumber = 0;
-			int packetsToSync = 5;
-			float packetLossRate = 0.2f;
-			byte[] incomingData = new byte[1024];			
-			DatagramPacket incomingPacket = new DatagramPacket(incomingData,incomingData.length);			
-			Queue<DatagramPacket> incomingQueue = new LinkedList<DatagramPacket>();
-			incomingQueue.add(incomingPacket);
-            while (!new String(incomingPacket.getData()).trim().equals("exit")) {
-				boolean synced = packetsNumber>packetsToSync;
-				incomingData = new byte[1024];
-				incomingPacket = new DatagramPacket(incomingData,incomingData.length);
-				
-				if(Math.random()>=packetLossRate){
-					socket.receive(incomingPacket);
-					if(synced){						
-					}
-					//System.out.println("SYMBOL IS: "+(int)incomingPacket.getData()[0]);
-					display(incomingPacket);	
-					incomingQueue.add(incomingPacket);
-				}
-				else{
-					System.out.println("SLEEPING");
-					incomingQueue.poll();
-					Thread.sleep(1000);
-				}
-				packetsNumber = packetsNumber + 1;
-			}
+        	
+        	int incomingBit;
+        	Queue<DatagramPacket> queue = new LinkedList<DatagramPacket>();
+        	byte[] incomingData = new byte[1024];            
+            incomingPacket = new DatagramPacket(incomingData, incomingData.length);
+            queue.add(incomingPacket);
+            while(!queue.isEmpty()){
+                socket.receive(queue.poll());
+                System.out.println("GOOTA SEND ACK");
+                String incomingMessage = new String(incomingPacket.getData()).trim();
+                if(!incomingMessage.equals("ACK")){
+                    //Send ACK
+                    byte[] ack = new byte[1024];     
+                    ack = "ACK".getBytes();
+                	InetAddress ip = InetAddress.getByName("127.0.0.1"); 
+                    outgoingPacket = new DatagramPacket(ack, ack.length,ip, port);
+                    socket.send(outgoingPacket);
+                    System.out.println("#SENT ACK");
+                    System.out.println("ACKDATA: "+new String(outgoingPacket.getData()).trim());
+                    //
+                    messageArea.setText(messageArea.getText().trim()+"\nFriend:  "+incomingMessage.substring(1));
+                    }
+                else{
+                    System.out.println("GOT ACK!!!!");
+                }
+                incomingData = new byte[1024];
+                incomingPacket = new DatagramPacket(incomingData, incomingData.length);
+                queue.add(incomingPacket);
+                
+            }
             
             
         }
@@ -215,11 +201,6 @@ public class Client extends javax.swing.JFrame {
             
         }
     }
-    public static void display(DatagramPacket incomingPacket){
-		String incomingMessage = new String(incomingPacket.getData());
-		messageArea.setText(messageArea.getText().trim()
-				+ "\nFriend:  " + incomingMessage.substring(1));
-	}
 
     // Variables declaration - do not modify//GEN-BEGIN:variables
     private javax.swing.JScrollPane jScrollPane1;
