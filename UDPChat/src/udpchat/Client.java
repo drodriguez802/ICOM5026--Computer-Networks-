@@ -12,6 +12,7 @@ import java.net.InetAddress;
 import java.net.SocketException;
 import java.util.LinkedList;
 import java.util.Queue;
+import java.util.concurrent.TimeUnit;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -21,26 +22,27 @@ import javax.swing.JOptionPane;
  *
  * @author Daniel
  */
-public class Client extends javax.swing.JFrame {
+public class Client2 extends javax.swing.JFrame {
 
     /**
-     * Creates new form Client
+     * Creates new form Client2
      */
 	static int port;
 	static String address;
 	static int outgoingBit;
+	static boolean received;
 	static DatagramSocket socket;
-	static DatagramPacket incomingPacket;
+	//static DatagramPacket incomingPacket;
 	static DatagramPacket outgoingPacket;
     static DataInputStream dataIn;
     static DataOutputStream dataOut;
     
-    public Client() {
+    public Client2() {
 
     	try {
 			socket = new DatagramSocket();
 	        initComponents();
-	        outgoingBit = (int)(Math.random() * 2);
+	        outgoingBit = 0;
 		} catch (SocketException e) {
 			// TODO Auto-generated catch block
 			e.printStackTrace();
@@ -58,7 +60,7 @@ public class Client extends javax.swing.JFrame {
 
         jScrollPane1 = new javax.swing.JScrollPane();
         messageArea = new javax.swing.JTextArea();
-        messageArea.setText(" CLIENT PORT : "+socket.getLocalPort());
+        messageArea.setText("Client2 PORT : "+socket.getLocalPort());
         messageText = new javax.swing.JTextField();
         messageSend = new javax.swing.JButton();
 
@@ -108,7 +110,7 @@ public class Client extends javax.swing.JFrame {
 
     private void messageSendActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_messageSendActionPerformed
     	try {
-    		outgoingBit = outgoingBit==1?0:1;
+    		outgoingBit = 1 - outgoingBit;
         	if(!messageText.getText().equals("")){
         	byte[] outgoingData = new byte[1024];
         	InetAddress ip = InetAddress.getByName("127.0.0.1");        	
@@ -117,13 +119,25 @@ public class Client extends javax.swing.JFrame {
             messageArea.setText(messageArea.getText().trim()+"\nMe:  "+output);
             output = outgoingBit+output;
             outgoingData = output.getBytes();
-            System.out.println("SERVER: "+outgoingData[0]);
+            System.out.println("Client2: "+outgoingData[0]);
         	outgoingPacket = new DatagramPacket(outgoingData, outgoingData.length, ip, port);
             socket.send(outgoingPacket);
+            if(Math.random()<0.1f){
+            	System.out.println("DUPLICATE CLIENT");
+            	socket.send(outgoingPacket);
+            }
+            received = false;
+            while(!received){
+            	TimeUnit.MILLISECONDS.sleep(50);
+            	if(!received){
+            	socket.send(outgoingPacket);
+            	System.out.println("HAD TO RESEND");
+            	}
+            }
             messageText.setText("");
         	}
-    	}catch (IOException ex) {
-            Logger.getLogger(Client.class.getName()).log(Level.SEVERE, null, ex);
+    	}catch (IOException | InterruptedException ex) {
+            Logger.getLogger(Client2.class.getName()).log(Level.SEVERE, null, ex);
         }
     }//GEN-LAST:event_messageSendActionPerformed
 
@@ -144,20 +158,20 @@ public class Client extends javax.swing.JFrame {
                 }
             }
         } catch (ClassNotFoundException ex) {
-            java.util.logging.Logger.getLogger(Client.class.getName()).log(java.util.logging.Level.SEVERE, null, ex);
+            java.util.logging.Logger.getLogger(Client2.class.getName()).log(java.util.logging.Level.SEVERE, null, ex);
         } catch (InstantiationException ex) {
-            java.util.logging.Logger.getLogger(Client.class.getName()).log(java.util.logging.Level.SEVERE, null, ex);
+            java.util.logging.Logger.getLogger(Client2.class.getName()).log(java.util.logging.Level.SEVERE, null, ex);
         } catch (IllegalAccessException ex) {
-            java.util.logging.Logger.getLogger(Client.class.getName()).log(java.util.logging.Level.SEVERE, null, ex);
+            java.util.logging.Logger.getLogger(Client2.class.getName()).log(java.util.logging.Level.SEVERE, null, ex);
         } catch (javax.swing.UnsupportedLookAndFeelException ex) {
-            java.util.logging.Logger.getLogger(Client.class.getName()).log(java.util.logging.Level.SEVERE, null, ex);
+            java.util.logging.Logger.getLogger(Client2.class.getName()).log(java.util.logging.Level.SEVERE, null, ex);
         }
         //</editor-fold>
 
         /* Create and display the form */
         java.awt.EventQueue.invokeLater(new Runnable() {
             public void run() {
-                new Client().setVisible(true);
+                new Client2().setVisible(true);
             }
         });
         
@@ -165,29 +179,52 @@ public class Client extends javax.swing.JFrame {
         	//address = JOptionPane.showInputDialog("Enter the target address:");
         	port = Integer.parseInt(JOptionPane.showInputDialog("Enter the target port:"));
         	
-        	int incomingBit;
+        	int expectingBit = 1;
+        	float packetLoss = 0.2f;
         	Queue<DatagramPacket> queue = new LinkedList<DatagramPacket>();
-        	byte[] incomingData = new byte[1024];            
-            incomingPacket = new DatagramPacket(incomingData, incomingData.length);
+        	byte[] incomingData = new byte[1024];
+        	DatagramPacket incomingPacket = new DatagramPacket(incomingData, incomingData.length);
             queue.add(incomingPacket);
             while(!queue.isEmpty()){
                 socket.receive(queue.poll());
-                System.out.println("GOOTA SEND ACK");
-                String incomingMessage = new String(incomingPacket.getData()).trim();
-                if(!incomingMessage.equals("ACK")){
-                    //Send ACK
-                    byte[] ack = new byte[1024];     
-                    ack = "ACK".getBytes();
-                	InetAddress ip = InetAddress.getByName("127.0.0.1"); 
-                    outgoingPacket = new DatagramPacket(ack, ack.length,ip, port);
-                    socket.send(outgoingPacket);
-                    System.out.println("#SENT ACK");
-                    System.out.println("ACKDATA: "+new String(outgoingPacket.getData()).trim());
-                    //
-                    messageArea.setText(messageArea.getText().trim()+"\nFriend:  "+incomingMessage.substring(1));
-                    }
+                if(Math.random()>=packetLoss){
+	                String incomingMessage = new String(incomingPacket.getData()).trim();
+	                if(!incomingMessage.substring(1).equals("ACK")){
+	                	System.out.println("INCOMING: "+incomingMessage.charAt(0));
+	                	System.out.println("EXPECTING: "+expectingBit);
+	                	if(Character.getNumericValue(incomingMessage.charAt(0))==expectingBit){
+		                    //Send ACK
+		                    byte[] ack = new byte[1024];
+		                    int nextBit = 1 - expectingBit;
+		                    String ackMessage = nextBit+"ACK";
+		                    ack = ackMessage.getBytes();
+		                	InetAddress ip = InetAddress.getByName("127.0.0.1"); 
+		                    outgoingPacket = new DatagramPacket(ack, ack.length,ip, port);
+		                    socket.send(outgoingPacket);
+		                    System.out.println("ACK SENT NEW");
+	                    	messageArea.setText(messageArea.getText().trim()+"\nFriend:  "+incomingMessage.substring(1)); 
+	                    	expectingBit = 1 - expectingBit;
+	                	}
+	                	else{
+	                		 	byte[] ack = new byte[1024];
+			                    String ackMessage = expectingBit+"ACK";
+			                    ack = ackMessage.getBytes();
+			                	InetAddress ip = InetAddress.getByName("127.0.0.1"); 
+			                    outgoingPacket = new DatagramPacket(ack, ack.length,ip, port);
+			                    socket.send(outgoingPacket);
+			                    System.out.println("ACK SENT SAME");
+	                		
+	                	}
+	                }
+	                else{
+	                	if(incomingMessage.charAt(0)!=outgoingBit){
+	                		received = true;
+	                    	System.out.println("ACK RECEIVED");
+	                	}
+	                }  
+                }
                 else{
-                    System.out.println("GOT ACK!!!!");
+                	System.out.println("PACKET LOST");
                 }
                 incomingData = new byte[1024];
                 incomingPacket = new DatagramPacket(incomingData, incomingData.length);
