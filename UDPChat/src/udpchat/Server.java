@@ -3,8 +3,6 @@
  * To change this template file, choose Tools | Templates
  * and open the template in the editor.
  */
-import java.io.DataInputStream;
-import java.io.DataOutputStream;
 import java.io.IOException;
 import java.net.DatagramPacket;
 import java.net.DatagramSocket;
@@ -13,42 +11,35 @@ import java.net.SocketException;
 import java.util.LinkedList;
 import java.util.Queue;
 import java.util.concurrent.TimeUnit;
-import java.util.logging.Level;
-import java.util.logging.Logger;
 
 import javax.swing.JOptionPane;
-
 /**
  *
  * @author Daniel
  */
 public class Server2 extends javax.swing.JFrame {
-
     /**
      * Creates new form Server2
      */
 	static int port;
-	static String address;
 	static int outgoingBit;
-	static boolean received;
+	static float packetDuplicate;
+	static String address;
+	static boolean receivedMessage;
 	static DatagramSocket socket;
-	//static DatagramPacket incomingPacket;
 	static DatagramPacket outgoingPacket;
-    static DataInputStream dataIn;
-    static DataOutputStream dataOut;
-    
     public Server2() {
-
     	try {
 			socket = new DatagramSocket();
+			socket.setSoTimeout(60000);
 	        initComponents();
-	        outgoingBit = 0;
+	        packetDuplicate = 0.1f;
+	        outgoingBit = (int)(Math.random() * 2);
 		} catch (SocketException e) {
 			// TODO Auto-generated catch block
 			e.printStackTrace();
 		}
     }
-
     /**
      * This method is called from within the constructor to initialize the form.
      * WARNING: Do NOT modify this code. The content of this method is always
@@ -57,28 +48,22 @@ public class Server2 extends javax.swing.JFrame {
     @SuppressWarnings("unchecked")
     // <editor-fold defaultstate="collapsed" desc="Generated Code">//GEN-BEGIN:initComponents
     private void initComponents() {
-
         jScrollPane1 = new javax.swing.JScrollPane();
         messageArea = new javax.swing.JTextArea();
         messageArea.setText("Server2 PORT : "+socket.getLocalPort());
         messageText = new javax.swing.JTextField();
         messageSend = new javax.swing.JButton();
-
         setDefaultCloseOperation(javax.swing.WindowConstants.EXIT_ON_CLOSE);
-
         messageArea.setColumns(20);
         messageArea.setRows(5);
         jScrollPane1.setViewportView(messageArea);
-
         messageText.setText("");
-
         messageSend.setText("SEND");
         messageSend.addActionListener(new java.awt.event.ActionListener() {
             public void actionPerformed(java.awt.event.ActionEvent evt) {
                 messageSendActionPerformed(evt);
             }
         });
-
         javax.swing.GroupLayout layout = new javax.swing.GroupLayout(getContentPane());
         getContentPane().setLayout(layout);
         layout.setHorizontalGroup(
@@ -104,43 +89,51 @@ public class Server2 extends javax.swing.JFrame {
                     .addComponent(messageSend, javax.swing.GroupLayout.DEFAULT_SIZE, 74, Short.MAX_VALUE))
                 .addContainerGap())
         );
-
         pack();
     }// </editor-fold>//GEN-END:initComponents
-
+    public static void sendACK(int expectingBit) throws IOException{
+    	byte[] ack = new byte[1024];
+        String ackMessage = expectingBit+"ACK";
+        ack = ackMessage.getBytes();
+    	InetAddress ip = InetAddress.getByName(address); 
+        DatagramPacket ackPacket = new DatagramPacket(ack, ack.length,ip, port);
+        socket.send(ackPacket);
+        System.out.println("ACK SENT");
+    }
     private void messageSendActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_messageSendActionPerformed
     	try {
-    		outgoingBit = 1 - outgoingBit;
         	if(!messageText.getText().equals("")){
-        	byte[] outgoingData = new byte[1024];
-        	InetAddress ip = InetAddress.getByName("127.0.0.1");        	
-            String output = "";
-            output = messageText.getText().trim();            
-            messageArea.setText(messageArea.getText().trim()+"\nMe:  "+output);
-            output = outgoingBit+output;
-            outgoingData = output.getBytes();
-            System.out.println("Server2: "+outgoingData[0]);
-        	outgoingPacket = new DatagramPacket(outgoingData, outgoingData.length, ip, port);
-            socket.send(outgoingPacket);
-            if(Math.random()<0.1f){
-            	System.out.println("DUPLICATE CLIENT");
-            	socket.send(outgoingPacket);
-            }
-            received = false;
-            while(!received){
-            	TimeUnit.MILLISECONDS.sleep(50);
-            	if(!received){
-            	socket.send(outgoingPacket);
-            	System.out.println("HAD TO RESEND");
-            	}
-            }
-            messageText.setText("");
+        		//Generating outgoing packet
+	        	byte[] outgoingData = new byte[1024];
+	        	InetAddress ip = InetAddress.getByName(address);        	
+	            String output = "";
+	            output = messageText.getText().trim();            
+	            messageArea.setText(messageArea.getText().trim()+"\nMe:  "+output);
+	            output = outgoingBit+" "+output;
+	            outgoingData = output.getBytes();
+	        	outgoingPacket = new DatagramPacket(outgoingData, outgoingData.length, ip, port);
+	        	//Sending packet
+	            socket.send(outgoingPacket);
+	            if(Math.random()<packetDuplicate){
+	            	System.out.println("SENT DUPLICATE");
+	            	socket.send(outgoingPacket);
+	            }
+	            receivedMessage = false;
+	            while(!receivedMessage){
+	            	TimeUnit.MILLISECONDS.sleep(50);
+	            	if(!receivedMessage){
+		            	socket.send(outgoingPacket);
+		            	System.out.println("HAD TO RESEND");
+	            	}
+	            }
+	            //Resetting input field state
+	            outgoingBit = 1 - outgoingBit;
+	            messageText.setText("");
         	}
-    	}catch (IOException | InterruptedException ex) {
-            Logger.getLogger(Server2.class.getName()).log(Level.SEVERE, null, ex);
-        }
+    	}catch (Exception e) {
+    		System.out.println("UNEXPECTED ERROR SENDING MESSAGE");
+    	}
     }//GEN-LAST:event_messageSendActionPerformed
-
     /**
      * @param args the command line arguments
      */
@@ -167,61 +160,78 @@ public class Server2 extends javax.swing.JFrame {
             java.util.logging.Logger.getLogger(Server2.class.getName()).log(java.util.logging.Level.SEVERE, null, ex);
         }
         //</editor-fold>
-
         /* Create and display the form */
         java.awt.EventQueue.invokeLater(new Runnable() {
             public void run() {
                 new Server2().setVisible(true);
             }
         });
-        
         try{
-        	//address = JOptionPane.showInputDialog("Enter the target address:");
+        	address = JOptionPane.showInputDialog("Enter the target address:");
         	port = Integer.parseInt(JOptionPane.showInputDialog("Enter the target port:"));
         	
-        	int expectingBit = 1;
-        	float packetLoss = 0.2f;
-        	Queue<DatagramPacket> queue = new LinkedList<DatagramPacket>();
+        	int expectingBit = (int)(Math.random() * 2);//Expected bit for the next message
+        	float packetLoss = 0.2f;//Packet loss probability
+            boolean synchedMSG = false;
+	        boolean synchedACK = false;
+            boolean listening = true;
+            String state = "UNSYNCHED";//System state
+            
         	byte[] incomingData = new byte[1024];       
         	DatagramPacket incomingPacket = new DatagramPacket(incomingData, incomingData.length);
+        	Queue<DatagramPacket> queue = new LinkedList<DatagramPacket>();
+        	
             queue.add(incomingPacket);
-            while(!queue.isEmpty()){
-                socket.receive(queue.poll());
-                if(Math.random()>=packetLoss){
+            while(true){
+            	while(listening){
+	            	try{
+	            		System.out.println("STATE: "+state);
+	            		socket.receive(queue.poll());
+	            		listening = false;
+	            	}
+	            	catch(IOException e){
+	            		queue.add(incomingPacket);
+	            		state = "UNSYNCHED";
+	            		synchedMSG = false;
+	            		synchedACK = false;
+	            	}
+            	}
+                if(Math.random()>=packetLoss){                	
 	                String incomingMessage = new String(incomingPacket.getData()).trim();
-	                if(!incomingMessage.substring(1).equals("ACK")){
-	                	System.out.println("INCOMING: "+incomingMessage.charAt(0));
-	                	System.out.println("EXPECTING: "+expectingBit);
-	                	if(Character.getNumericValue(incomingMessage.charAt(0))==expectingBit){
-		                    //Send ACK
-		                    byte[] ack = new byte[1024];
-		                    int nextBit = 1 - expectingBit;
-		                    String ackMessage = nextBit+"ACK";
-		                    ack = ackMessage.getBytes();
-		                	InetAddress ip = InetAddress.getByName("127.0.0.1"); 
-		                    outgoingPacket = new DatagramPacket(ack, ack.length,ip, port);
-		                    socket.send(outgoingPacket);
-		                    System.out.println("ACK SENT NEW");
-	                    	messageArea.setText(messageArea.getText().trim()+"\nFriend:  "+incomingMessage.substring(1));
-	                    	expectingBit = 1 - expectingBit;
-	                	}
-	                	else{
-	                		 	byte[] ack = new byte[1024];
-			                    String ackMessage = expectingBit+"ACK";
-			                    ack = ackMessage.getBytes();
-			                	InetAddress ip = InetAddress.getByName("127.0.0.1"); 
-			                    outgoingPacket = new DatagramPacket(ack, ack.length,ip, port);
-			                    socket.send(outgoingPacket);
-			                    System.out.println("ACK SENT SAME");
-	                		
-	                	}
+	                //Synched State
+	                if(synchedMSG&&synchedACK){
+	                	state = "SYNCHED";
+		                if(!incomingMessage.substring(1).equals("ACK")){
+		                	if(Character.getNumericValue(incomingMessage.charAt(0))==expectingBit){
+		                    	expectingBit = 1 - expectingBit;
+		                    	messageArea.setText(messageArea.getText().trim()+"\nFriend:  "+incomingMessage.substring(2));
+		                	}
+		                	sendACK(expectingBit);
+		                }
+		                else{
+		                	if(incomingMessage.charAt(0)!=outgoingBit){
+		                		receivedMessage = true;
+		                    	System.out.println("ACK RECEIVED");
+		                	}
+		                }
 	                }
+	                //Unsynched State
 	                else{
-	                	if(incomingMessage.charAt(0)!=outgoingBit){
-	                		received = true;
-	                    	System.out.println("ACK RECEIVED");
-	                	}
-	                }  
+	                	state = "UNSYNCHED";
+	                	if(!incomingMessage.substring(1).equals("ACK")){
+	                		if(!synchedMSG){
+		                    	messageArea.setText(messageArea.getText().trim()+"\nFriend:  "+incomingMessage.substring(2));
+	                		}
+	                		synchedMSG = true;
+		                    	sendACK(expectingBit);
+		                }
+		                else{
+		                		System.out.println("UNSYNC ACK RECEIVED");
+		                		outgoingBit = 1 - Character.getNumericValue(incomingMessage.charAt(0));
+		                		receivedMessage = true;
+		                		synchedACK = true;
+		                }
+	                }
                 }
                 else{
                 	System.out.println("PACKET LOST");
@@ -229,16 +239,12 @@ public class Server2 extends javax.swing.JFrame {
                 incomingData = new byte[1024];
                 incomingPacket = new DatagramPacket(incomingData, incomingData.length);
                 queue.add(incomingPacket);
-                
+                listening = true;
             }
-            
-            
         }
         catch(Exception e){
-            
         }
     }
-
     // Variables declaration - do not modify//GEN-BEGIN:variables
     private javax.swing.JScrollPane jScrollPane1;
     private static javax.swing.JTextArea messageArea;
