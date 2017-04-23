@@ -9,6 +9,9 @@ Desktop.ini
 $RECYCLE.BIN/
 
 # Windows Installer files
+*.html
+*.js
+*.css
 *.cab
 *.msi
 *.msm
